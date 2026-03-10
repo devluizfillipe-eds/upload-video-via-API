@@ -1,82 +1,46 @@
 import requests
+import json
 
-CLIENT_ID = ""
-CLIENT_SECRET = ""
-REFRESH_TOKEN = ""
-PARENT_ASSET_ID = ""
+ACCESS_TOKEN = "SEU_ACCESS_TOKEN"
+PARENT_ASSET_ID = "SEU_PARENT_ASSET_ID"
 
 VIDEO_PATH = r"C:\frameio_test\teste.mp4"
 VIDEO_NAME = "teste.mp4"
 
+headers = {
+    "Authorization": f"Bearer {ACCESS_TOKEN}"
+}
 
-def get_access_token():
-
-    url = "https://api.frame.io/oauth/token"
-
-    payload = {
-        "grant_type": "refresh_token",
-        "refresh_token": REFRESH_TOKEN,
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET
-    }
-
-    r = requests.post(url, data=payload)
-
-    print("TOKEN RESPONSE:", r.text)
-
-    return r.json()["access_token"]
-
-
-def create_asset(token):
-
-    url = "https://api.frame.io/v4/assets"
-
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-
-    payload = {
+# criar asset
+r = requests.post(
+    "https://api.frame.io/v4/assets",
+    headers=headers,
+    json={
         "name": VIDEO_NAME,
         "parent_id": PARENT_ASSET_ID,
         "type": "file"
     }
+)
 
-    r = requests.post(url, headers=headers, json=payload)
-
-    print("ASSET RESPONSE:", r.text)
-
-    return r.json()
-
-
-def upload_file(upload_url):
-
-    with open(VIDEO_PATH, "rb") as f:
-        requests.put(upload_url, data=f)
-
-
-def finalize_upload(token, asset_id):
-
-    url = f"https://api.frame.io/v4/assets/{asset_id}/complete"
-
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-
-    r = requests.post(url, headers=headers)
-
-    print("FINALIZE RESPONSE:", r.text)
-
-
-token = get_access_token()
-
-asset = create_asset(token)
+asset = r.json()
 
 asset_id = asset["id"]
 upload_url = asset["upload_url"]
 
-upload_file(upload_url)
+print("ASSET ID:", asset_id)
 
-finalize_upload(token, asset_id)
+# upload do video
+with open(VIDEO_PATH, "rb") as f:
+    requests.put(upload_url, data=f)
+
+# finalizar upload
+requests.post(
+    f"https://api.frame.io/v4/assets/{asset_id}/complete",
+    headers=headers
+)
+
+# salvar asset_id para o script do DaVinci
+with open(r"C:\frameio_test\asset_id.json", "w") as f:
+    json.dump({"asset_id": asset_id}, f)
 
 print("UPLOAD FINALIZADO")
-print("ASSET ID:", asset_id)
