@@ -1,17 +1,17 @@
 import requests
-import os
 
-CLIENT_ID = "SEU_CLIENT_ID"
-CLIENT_SECRET = "SEU_CLIENT_SECRET"
-REFRESH_TOKEN = "SEU_REFRESH_TOKEN"
-PARENT_ASSET_ID = "SEU_PARENT_ASSET_ID"
+CLIENT_ID = ""
+CLIENT_SECRET = ""
+REFRESH_TOKEN = ""
+PARENT_ASSET_ID = ""
 
 VIDEO_PATH = r"C:\frameio_test\teste.mp4"
 VIDEO_NAME = "teste.mp4"
 
 
 def get_access_token():
-    url = "https://api.frame.io/v2/oauth/token"
+
+    url = "https://api.frame.io/oauth/token"
 
     payload = {
         "grant_type": "refresh_token",
@@ -22,12 +22,14 @@ def get_access_token():
 
     r = requests.post(url, data=payload)
 
+    print("TOKEN RESPONSE:", r.text)
+
     return r.json()["access_token"]
 
 
 def create_asset(token):
 
-    url = "https://api.frame.io/v2/assets"
+    url = "https://api.frame.io/v4/assets"
 
     headers = {
         "Authorization": f"Bearer {token}"
@@ -41,6 +43,8 @@ def create_asset(token):
 
     r = requests.post(url, headers=headers, json=payload)
 
+    print("ASSET RESPONSE:", r.text)
+
     return r.json()
 
 
@@ -52,13 +56,15 @@ def upload_file(upload_url):
 
 def finalize_upload(token, asset_id):
 
-    url = f"https://api.frame.io/v2/assets/{asset_id}/complete"
+    url = f"https://api.frame.io/v4/assets/{asset_id}/complete"
 
     headers = {
         "Authorization": f"Bearer {token}"
     }
 
-    requests.post(url, headers=headers)
+    r = requests.post(url, headers=headers)
+
+    print("FINALIZE RESPONSE:", r.text)
 
 
 token = get_access_token()
@@ -73,4 +79,4 @@ upload_file(upload_url)
 finalize_upload(token, asset_id)
 
 print("UPLOAD FINALIZADO")
-print("ASSET_ID:", asset_id)
+print("ASSET ID:", asset_id)
