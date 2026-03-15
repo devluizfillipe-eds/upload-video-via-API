@@ -1,88 +1,162 @@
 import requests
 import os
 import json
+import sys
+from datetime import datetime
 
-# ================= CONFIG =================
-ACCESS_TOKEN = "seu_token_aqui"
-ACCOUNT_ID = "seu_account_id"  # Obtenha via GET /v4/me ou /v4/accounts
-FOLDER_ID = "seu_folder_id"    # ID da pasta onde vai subir o vídeo
-VIDEO_PATH = r"C:\frameio_test\teste.mp4"
-# ==========================================
+# ============ CONFIGURAÇÕES (EDITAR AQUI) ============
+ACCESS_TOKEN = "SEU_TOKEN_AQUI"  # ← COLE SEU TOKEN ENTRE AS ASPAS
+ACCOUNT_ID = "SEU_ACCOUNT_ID_AQUI"  # ← COLE SEU ACCOUNT_ID
+FOLDER_ID = "SEU_FOLDER_ID_AQUI"  # ← COLE O ROOT_FOLDER_ID
+# =====================================================
 
-headers = {
-    "Authorization": f"Bearer {ACCESS_TOKEN}",
-    "Content-Type": "application/json"
-}
+# Arquivos de controle
+HISTORICO_FILE = "historico_uploads.json"
+ULTIMO_FILE = "ultimo_upload.json"
 
-video_name = os.path.basename(VIDEO_PATH)
-file_size = os.path.getsize(VIDEO_PATH)
+def carregar_historico():
+    """Carrega o histórico de uploads ou cria um novo"""
+    if os.path.exists(HISTORICO_FILE):
+        with open(HISTORICO_FILE, 'r') as f:
+            return json.load(f)
+    return {"uploads": [], "ultimo": None}
 
-print(f"Arquivo: {video_name} ({file_size} bytes)")
+def salvar_historico(historico):
+    """Salva o histórico de uploads"""
+    with open(HISTORICO_FILE, 'w') as f:
+        json.dump(historico, f, indent=2)
 
-# 1️⃣ CRIAR O ARQUIVO (NÃO É MAIS /UPLOADS)
-print("\n1. Criando registro do arquivo...")
+def salvar_ultimo(file_id, nome_video):
+    """Salva o último upload em arquivo separado (para compatibilidade)"""
+    with open(ULTIMO_FILE, 'w') as f:
+        json.dump({
+            "file_id": file_id,
+            "file_name": nome_video,
+            "upload_time": datetime.now().isoformat()
+        }, f, indent=2)
 
-create_url = f"https://api.frame.io/v4/accounts/{ACCOUNT_ID}/folders/{FOLDER_ID}/files"
+def upload_video(caminho_video):
+    """Faz o upload do vídeo para o Frame.io"""
+    
+    if not os.path.exists(caminho_video):
+        print(f"❌ Arquivo não encontrado: {caminho_video}")
+        return None
 
-payload = {
-    "name": video_name,
-    "file_size": file_size,
-    "media_type": "video/mp4"  # Ajuste conforme seu tipo de arquivo
-}
-
-r = requests.post(create_url, headers=headers, json=payload)
-
-if r.status_code != 201:  # V4 retorna 201 Created
-    print(f"ERRO: {r.status_code}")
-    print(r.text)
-    exit(1)
-
-data = r.json()["data"]  # Na V4, resposta vem dentro de "data" [citation:5]
-file_id = data["id"]
-upload_urls = data["upload_urls"]  # Array de URLs para upload multipart
-
-print(f"✓ Arquivo criado. ID: {file_id}")
-print(f"  URLs de upload: {len(upload_urls)} parte(s)")
-
-# 2️⃣ FAZER UPLOAD DAS PARTES (S3)
-print("\n2. Enviando arquivo para S3...")
-
-with open(VIDEO_PATH, "rb") as f:
-    for i, part_info in enumerate(upload_urls):
-        part_size = part_info["size"]
-        part_url = part_info["url"]
-        
-        # Lê apenas o chunk correspondente
-        chunk = f.read(part_size)
-        
-        # Upload direto para S3 com headers específicos [citation:2]
-        s3_headers = {
-            "Content-Type": "video/mp4",
-            "x-amz-acl": "private"
-        }
-        
-        r_s3 = requests.put(part_url, data=chunk, headers=s3_headers)
-        
-        if r_s3.status_code != 200:
-            print(f"  Erro na parte {i+1}: {r_s3.status_code}")
-            print(r_s3.text)  # AWS retorna XML
-            exit(1)
-        
-        print(f"  Parte {i+1}/{len(upload_urls)} OK")
-
-print("✓ Upload concluído")
-
-# 3️⃣ FINALIZAR (opcional - o sistema detecta automaticamente quando todas as partes chegaram)
-# O endpoint /complete não é mais necessário na V4 [citation:2]
-
-# 4️⃣ SALVAR ID PARA CONSULTAR COMENTÁRIOS DEPOIS
-with open("asset_id.json", "w") as f:
-    json.dump({
-        "account_id": ACCOUNT_ID,
-        "folder_id": FOLDER_ID,
+    nome_video = os.path.basename(caminho_video)
+    tamanho = os.path.getsize(caminho_video)
+    
+    print(f"\n📹 Vídeo: {nome_video}")
+    print(f"📦 Tamanho: {tamanho:,} bytes")
+    
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    # 1. Criar arquivo no Frame.io
+    print("\n📝 Criando registro...")
+    url = f"https://api.frame.io/v4/accounts/{ACCOUNT_ID}/folders/{FOLDER_ID}/files"
+    
+    payload = {
+        "name": nome_video,
+        "file_size": tamanho,
+        "media_type": "video/mp4"
+    }
+    
+    r = requests.post(url, headers=headers, json=payload)
+    
+    if r.status_code != 201:
+        print(f"❌ Erro ao criar: {r.status_code}")
+        print(r.text)
+        return None
+    
+    data = r.json()["data"]
+    file_id = data["id"]
+    upload_urls = data["upload_urls"]
+    
+    print(f"✅ Registro criado. File ID: {file_id}")
+    
+    # 2. Upload das partes
+    print(f"\n📤 Enviando ({len(upload_urls)} parte(s))...")
+    
+    with open(caminho_video, "rb") as f:
+        for i, parte in enumerate(upload_urls):
+            print(f"   Parte {i+1}/{len(upload_urls)}...")
+            chunk = f.read(parte["size"])
+            
+            s3_headers = {
+                "Content-Type": "video/mp4",
+                "x-amz-acl": "private"
+            }
+            
+            r_s3 = requests.put(parte["url"], data=chunk, headers=s3_headers)
+            
+            if r_s3.status_code not in [200, 204]:
+                print(f"❌ Erro na parte {i+1}")
+                return None
+    
+    print("\n✅ Upload concluído!")
+    
+    # 3. Salvar no histórico
+    historico = carregar_historico()
+    
+    novo_registro = {
         "file_id": file_id,
-        "file_name": video_name
-    }, f, indent=2)
+        "nome": nome_video,
+        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "caminho_original": caminho_video,
+        "tamanho": tamanho
+    }
+    
+    historico["uploads"].append(novo_registro)
+    historico["ultimo"] = file_id
+    salvar_historico(historico)
+    
+    # 4. Salvar último upload (compatibilidade)
+    salvar_ultimo(file_id, nome_video)
+    
+    print(f"\n📌 File ID: {file_id}")
+    print(f"📊 Total de uploads no histórico: {len(historico['uploads'])}")
+    
+    return file_id
 
-print(f"\n✓ ID do arquivo salvo em asset_id.json")
-print(f"  Use este file_id para consultar comentários")
+def listar_uploads(historico):
+    """Mostra os últimos uploads"""
+    if not historico["uploads"]:
+        print("\n📭 Nenhum upload encontrado.")
+        return
+    
+    print("\n📋 ÚLTIMOS UPLOADS:")
+    print("-" * 60)
+    
+    # Mostra os 10 últimos
+    for i, up in enumerate(historico["uploads"][-10:], 1):
+        marcador = "▶️" if up["file_id"] == historico["ultimo"] else "  "
+        print(f"{marcador} {i}. {up['nome']}")
+        print(f"     ID: {up['file_id']}")
+        print(f"     Data: {up['data']}")
+    print("-" * 60)
+
+# ============ EXECUÇÃO PRINCIPAL ============
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Upload de vídeo para Frame.io')
+    parser.add_argument('video', nargs='?', help='Caminho do arquivo de vídeo')
+    parser.add_argument('--listar', '-l', action='store_true', help='Listar uploads anteriores')
+    
+    args = parser.parse_args()
+    
+    if args.listar:
+        historico = carregar_historico()
+        listar_uploads(historico)
+        sys.exit(0)
+    
+    if not args.video:
+        print("❌ Informe o caminho do vídeo")
+        print("\nUso:")
+        print("  python upload_video.py C:\\caminho\\para\\video.mp4")
+        print("  python upload_video.py --listar")
+        sys.exit(1)
+    
+    upload_video(args.video)
