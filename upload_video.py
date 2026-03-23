@@ -5,9 +5,9 @@ import sys
 from datetime import datetime
 
 # ============ CONFIGURAÇÕES (EDITAR AQUI) ============
-ACCESS_TOKEN = "SEU_TOKEN_AQUI"  # ← COLE SEU TOKEN ENTRE AS ASPAS
-ACCOUNT_ID = "SEU_ACCOUNT_ID_AQUI"  # ← COLE SEU ACCOUNT_ID
-FOLDER_ID = "SEU_FOLDER_ID_AQUI"  # ← COLE O ROOT_FOLDER_ID
+ACCESS_TOKEN = "Acesstoken"  # ← COLE SEU TOKEN ENTRE AS ASPAS
+ACCOUNT_ID = "id acount"  # ← COLE SEU ACCOUNT_ID
+FOLDER_ID = "folder id"  # ← COLE O ROOT_FOLDER_ID
 # =====================================================
 
 # Arquivos de controle
@@ -56,12 +56,14 @@ def upload_video(caminho_video):
     # 1. Criar arquivo no Frame.io
     print("\n📝 Criando registro...")
     url = f"https://api.frame.io/v4/accounts/{ACCOUNT_ID}/folders/{FOLDER_ID}/files"
-    
+
     payload = {
-        "name": nome_video,
-        "file_size": tamanho,
-        "media_type": "video/mp4"
-    }
+        "data": {
+            "name": nome_video,
+            "file_size": tamanho,
+            "media_type": "video/mp4"
+        }
+    }    
     
     r = requests.post(url, headers=headers, json=payload)
     
