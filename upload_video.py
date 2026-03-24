@@ -10,43 +10,37 @@ ACCOUNT_ID = "id acount"  # ← COLE SEU ACCOUNT_ID
 FOLDER_ID = "folder id"  # ← COLE O ROOT_FOLDER_ID
 # =====================================================
 
-# Arquivos de controle
-HISTORICO_FILE = "historico_uploads.json"
-ULTIMO_FILE = "ultimo_upload.json"
+# Arquivo de mapeamento (único arquivo de controle)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MAPEAMENTO_FILE = os.path.join(SCRIPT_DIR, "mapeamento_videos.json")
 
-def carregar_historico():
-    """Carrega o histórico de uploads ou cria um novo"""
-    if os.path.exists(HISTORICO_FILE):
-        with open(HISTORICO_FILE, 'r') as f:
+def carregar_mapeamento():
+    """Carrega o mapeamento de vídeos locais para file_ids do Frame.io"""
+    if os.path.exists(MAPEAMENTO_FILE):
+        with open(MAPEAMENTO_FILE, 'r') as f:
             return json.load(f)
-    return {"uploads": [], "ultimo": None}
+    return {}
 
-def salvar_historico(historico):
-    """Salva o histórico de uploads"""
-    with open(HISTORICO_FILE, 'w') as f:
-        json.dump(historico, f, indent=2)
-
-def salvar_ultimo(file_id, nome_video):
-    """Salva o último upload em arquivo separado (para compatibilidade)"""
-    with open(ULTIMO_FILE, 'w') as f:
-        json.dump({
-            "file_id": file_id,
-            "file_name": nome_video,
-            "upload_time": datetime.now().isoformat()
-        }, f, indent=2)
+def salvar_mapeamento(mapeamento):
+    """Salva o mapeamento de vídeos locais para file_ids"""
+    with open(MAPEAMENTO_FILE, 'w') as f:
+        json.dump(mapeamento, f, indent=2)
 
 def upload_video(caminho_video):
-    """Faz o upload do vídeo para o Frame.io"""
+    """Faz o upload do vídeo para o Frame.io e registra no mapeamento"""
     
     if not os.path.exists(caminho_video):
         print(f"❌ Arquivo não encontrado: {caminho_video}")
         return None
 
+    # Converte para caminho absoluto
+    caminho_video = os.path.abspath(caminho_video)
     nome_video = os.path.basename(caminho_video)
     tamanho = os.path.getsize(caminho_video)
     
     print(f"\n📹 Vídeo: {nome_video}")
     print(f"📦 Tamanho: {tamanho:,} bytes")
+    print(f"📁 Caminho: {caminho_video}")
     
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
@@ -99,45 +93,32 @@ def upload_video(caminho_video):
     
     print("\n✅ Upload concluído!")
     
-    # 3. Salvar no histórico
-    historico = carregar_historico()
-    
-    novo_registro = {
-        "file_id": file_id,
-        "nome": nome_video,
-        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "caminho_original": caminho_video,
-        "tamanho": tamanho
-    }
-    
-    historico["uploads"].append(novo_registro)
-    historico["ultimo"] = file_id
-    salvar_historico(historico)
-    
-    # 4. Salvar último upload (compatibilidade)
-    salvar_ultimo(file_id, nome_video)
+    # 3. Salvar no mapeamento
+    mapeamento = carregar_mapeamento()
+    mapeamento[caminho_video] = file_id
+    salvar_mapeamento(mapeamento)
     
     print(f"\n📌 File ID: {file_id}")
-    print(f"📊 Total de uploads no histórico: {len(historico['uploads'])}")
+    print(f"✅ Mapeamento salvo: {caminho_video} -> {file_id}")
     
     return file_id
 
-def listar_uploads(historico):
-    """Mostra os últimos uploads"""
-    if not historico["uploads"]:
-        print("\n📭 Nenhum upload encontrado.")
+def listar_mapeamento():
+    """Mostra todos os vídeos mapeados"""
+    mapeamento = carregar_mapeamento()
+    
+    if not mapeamento:
+        print("\n📭 Nenhum vídeo mapeado.")
         return
     
-    print("\n📋 ÚLTIMOS UPLOADS:")
-    print("-" * 60)
-    
-    # Mostra os 10 últimos
-    for i, up in enumerate(historico["uploads"][-10:], 1):
-        marcador = "▶️" if up["file_id"] == historico["ultimo"] else "  "
-        print(f"{marcador} {i}. {up['nome']}")
-        print(f"     ID: {up['file_id']}")
-        print(f"     Data: {up['data']}")
-    print("-" * 60)
+    print("\n📋 VÍDEOS MAPEADOS:")
+    print("-" * 70)
+    for caminho, file_id in mapeamento.items():
+        nome = os.path.basename(caminho)
+        print(f"🎬 {nome}")
+        print(f"   ID: {file_id}")
+        print(f"   Caminho: {caminho}")
+        print("-" * 70)
 
 # ============ EXECUÇÃO PRINCIPAL ============
 if __name__ == "__main__":
@@ -145,13 +126,12 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Upload de vídeo para Frame.io')
     parser.add_argument('video', nargs='?', help='Caminho do arquivo de vídeo')
-    parser.add_argument('--listar', '-l', action='store_true', help='Listar uploads anteriores')
+    parser.add_argument('--listar', '-l', action='store_true', help='Listar vídeos mapeados')
     
     args = parser.parse_args()
     
     if args.listar:
-        historico = carregar_historico()
-        listar_uploads(historico)
+        listar_mapeamento()
         sys.exit(0)
     
     if not args.video:
