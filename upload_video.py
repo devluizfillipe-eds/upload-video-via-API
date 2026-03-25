@@ -2,15 +2,13 @@ import requests
 import os
 import json
 import sys
-from datetime import datetime
 
-# ============ CONFIGURAÇÕES (EDITAR AQUI) ============
-ACCESS_TOKEN = "Acesstoken"  # ← COLE SEU TOKEN ENTRE AS ASPAS
-ACCOUNT_ID = "id acount"  # ← COLE SEU ACCOUNT_ID
-FOLDER_ID = "folder id"  # ← COLE O ROOT_FOLDER_ID
-# =====================================================
+# ============ CONFIGURAÇÕES ============
+ACCESS_TOKEN = "Acesstoken"  # ← COLE SEU TOKEN
+ACCOUNT_ID = "account_id"  # ← SEU ACCOUNT_ID
+FOLDER_ID = "folder_id"  # ← SUA FOLDER_ID
+# ======================================
 
-# Arquivo de mapeamento (único arquivo de controle)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MAPEAMENTO_FILE = os.path.join(SCRIPT_DIR, "mapeamento_videos.json")
 
@@ -93,13 +91,13 @@ def upload_video(caminho_video):
     
     print("\n✅ Upload concluído!")
     
-    # 3. Salvar no mapeamento
+    # 3. Salvar no mapeamento usando caminho completo como chave
     mapeamento = carregar_mapeamento()
     mapeamento[caminho_video] = file_id
     salvar_mapeamento(mapeamento)
     
-    print(f"\n📌 File ID: {file_id}")
-    print(f"✅ Mapeamento salvo: {caminho_video} -> {file_id}")
+    print(f"\n✅ Mapeamento salvo: {caminho_video} -> {file_id}")
+    print(f"📌 File ID: {file_id}")
     
     return file_id
 
